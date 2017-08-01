@@ -8,7 +8,7 @@ pub fn simulate_server() {
     let peer1 = server.new(o!("peer_addr" => "8.8.8.8", "port" => "18230"));
     let peer2 = server.new(o!("peer_addr" => "82.9.9.9", "port" => "42381"));
 
-    co_slog::set_logger(server);
+    let _log = co_slog::set_logger(server);
     info!("starting");
     info!("listening");
 
