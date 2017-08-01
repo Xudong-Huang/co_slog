@@ -1,8 +1,10 @@
-#[macro_use]
+#[macro_use(o, kv, slog_log, slog_kv, slog_record, slog_record_static, slog_b, slog_trace,
+            slog_debug, slog_info, slog_warn, slog_error, slog_crit)]
 extern crate slog;
 extern crate slog_term;
 extern crate slog_async;
-extern crate slog_scope;
+#[macro_use]
+extern crate co_slog;
 
 use slog::Drain;
 use std::sync::Arc;
@@ -16,6 +18,9 @@ fn main() {
 
     let log = slog::Logger::root(Arc::new(drain), o!("version" => "0.5"));
 
-    let _guard = slog_scope::set_global_logger(log);
+
+    info!("without logger set");
+
+    let _guard = co_slog::set_logger(log);
     common::simulate_server();
 }

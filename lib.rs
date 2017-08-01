@@ -6,33 +6,17 @@
 //! Set of macros is also provided as an alternative to original `slog` crate macros, for logging
 //! directly to `Logger` of the current logging scope.
 //!
-//! # Set global logger upfront
-//!
-//! **Warning**: Since `slog-scope` version 4.0.0, `slog-scope` defaults to
-//! panicking on logging if no scope or global logger was set. Because of it, it
-//! is advised to always set a global logger upfront with `set_global_logger`.
-//!
-//! # Using `slog-scope` as a part of API is not advised
-//!
-//! Part of a `slog` logging philosophy is ability to freely express logging contexts
-//! according to logical structure, rather than callstack structure. By using
-//! logging scopes the logging context is tied to code flow again, which is less
-//! expressive.
-//!
-//! It is generally advised **NOT** to use `slog_scope` in libraries. Read more in
-//! [slog-rs FAQ](https://github.com/slog-rs/slog/wiki/FAQ#do-i-have-to-pass-logger-around)
-//!
 //! ```
 //! #[macro_use(slog_o, slog_info, slog_log, slog_record, slog_record_static, slog_b, slog_kv)]
 //! extern crate slog;
 //! #[macro_use]
-//! extern crate slog_scope;
+//! extern crate co_slog;
 //! extern crate slog_term;
 //!
 //! use slog::Drain;
 //!
 //! fn foo() {
-//!     slog_info!(slog_scope::logger(), "foo");
+//!     slog_info!(co_slog::logger(), "foo");
 //!     info!("foo"); // Same as above, but more ergonomic and a bit faster
 //!                   // since it uses `with_logger`
 //! }
@@ -45,27 +29,26 @@
 //!     );
 //!
 //!     // Make sure to save the guard, see documentation for more information
-//!     let _guard = slog_scope::set_global_logger(log);
-//!     slog_scope::scope(&slog_scope::logger().new(slog_o!("scope" => "1")),
-//!         || foo()
-//!     );
+//!     let _guard = co_slog::set_logger(log.new(slog_o!("scope" => "1")));
+//!     foo();
 //! }
 
 #![warn(missing_docs)]
 
 #[macro_use(o)]
 extern crate slog;
-#[macro_use]
-extern crate lazy_static;
-extern crate crossbeam;
+#[macro_use(coroutine_local)]
+extern crate may;
+extern crate slog_term;
+extern crate slog_async;
 
 use slog::*;
 
-use std::sync::Arc;
+// use std::sync::Arc;
+use std::sync::Mutex;
 use std::cell::RefCell;
-use crossbeam::sync::ArcCell;
+// use may::sync::Mutex;
 
-use std::result;
 
 /// Log a critical level message using current scope logger
 #[macro_export]
@@ -98,93 +81,45 @@ macro_rules! trace( ($($args:tt)+) => {
     $crate::with_logger(|logger| slog_trace![logger, $($args)+])
 };);
 
-thread_local! {
-    static TL_SCOPES: RefCell<Vec<*const slog::Logger>> = RefCell::new(Vec::with_capacity(8))
-}
-
-lazy_static! {
-    static ref GLOBAL_LOGGER : ArcCell<slog::Logger> = ArcCell::new(
-        Arc::new(
-            slog::Logger::root(slog::Discard, o!())
-        )
-    );
-}
-
-struct NoGlobalLoggerSet;
-
-impl slog::Drain for NoGlobalLoggerSet {
-    type Ok = ();
-    type Err = slog::Never;
-
-    fn log(&self,
-           _record: &Record,
-           _values: &OwnedKVList)
-        -> result::Result<Self::Ok, Self::Err> {
-            panic!(
-            "slog-scope: No logger set. Use `slog_scope::set_global_logger` or `slog_scope::scope`."
-            )
-        }
-}
-
-
-/// Guard resetting global logger
-///
-/// On drop it will reset global logger to `slog::Discard`.
-/// This will `drop` any existing global logger.
-#[must_use]
-pub struct GlobalLoggerGuard {
-    canceled : bool,
-}
-
-impl GlobalLoggerGuard {
-
-    fn new() -> Self {
-        GlobalLoggerGuard {
-            canceled: false,
-        }
-    }
-
-    /// Cancel resetting global logger
-    pub fn cancel_reset(mut self) {
-        self.canceled = true;
+coroutine_local! {
+    static TL_SCOPES: RefCell<Vec<slog::Logger>> = {
+        let mut log_stack = Vec::with_capacity(8);
+        // the default logger
+        let decorator = slog_term::TermDecorator::new().build();
+        // let drain = slog_term::FullFormat::new(decorator).build().fuse();
+        let drain = Mutex::new(slog_term::FullFormat::new(decorator).build()).fuse();
+        // let drain = slog_async::Async::new(drain).build().fuse();
+        let log = slog::Logger::root(drain, o!());
+        log_stack.push(log);
+        RefCell::new(log_stack)
     }
 }
 
-impl Drop for GlobalLoggerGuard {
-    fn drop(&mut self) {
-        if !self.canceled {
-            let _ = GLOBAL_LOGGER.set(
-                Arc::new(
-                    slog::Logger::root(NoGlobalLoggerSet, o!())
-                    )
-                );
-        }
-    }
-}
-
-
-/// Set global `Logger` that is returned by calls like `logger()` outside of any logging scope.
-pub fn set_global_logger(l: slog::Logger) -> GlobalLoggerGuard {
-    let _ = GLOBAL_LOGGER.set(Arc::new(l));
-
-    GlobalLoggerGuard::new()
-}
-
-struct ScopeGuard;
-
+/// scope logger guard, when dropped would pop it's own logger
+pub struct ScopeGuard;
 
 impl ScopeGuard {
-    fn new(logger: &slog::Logger) -> Self {
-        TL_SCOPES.with(|s| { s.borrow_mut().push(logger as *const Logger); });
-
+    /// push
+    fn new(logger: slog::Logger) -> Self {
+        TL_SCOPES.with(|s| s.borrow_mut().push(logger));
         ScopeGuard
     }
 }
 
 impl Drop for ScopeGuard {
     fn drop(&mut self) {
-        TL_SCOPES.with(|s| { s.borrow_mut().pop().expect("TL_SCOPES should contain a logger"); })
+        TL_SCOPES.with(|s| {
+            s.borrow_mut().pop().expect(
+                "TL_SCOPES should contain a logger",
+            );
+        })
     }
+}
+
+/// push the `Logger` for the following logging scope
+/// return a `ScopeGuard` when drop would automatically pop
+pub fn set_logger(logger: slog::Logger) -> ScopeGuard {
+    ScopeGuard::new(logger)
 }
 
 /// Access the `Logger` for the current logging scope
@@ -196,8 +131,8 @@ pub fn logger() -> Logger {
     TL_SCOPES.with(|s| {
         let s = s.borrow();
         match s.last() {
-            Some(logger) => (unsafe {&**logger}).clone(),
-            None => (*GLOBAL_LOGGER.get()).clone(),
+            Some(logger) => logger.clone(),
+            None => unreachable!(),
         }
     })
 }
@@ -206,38 +141,15 @@ pub fn logger() -> Logger {
 ///
 /// This function doesn't have to clone the Logger
 /// so it might be a bit faster.
-pub fn with_logger<F, R>(f : F) -> R
-where F : FnOnce(&Logger) -> R {
+pub fn with_logger<F, R>(f: F) -> R
+where
+    F: FnOnce(&Logger) -> R,
+{
     TL_SCOPES.with(|s| {
         let s = s.borrow();
         match s.last() {
-            Some(logger) => f(unsafe {&**logger}),
-            None => f(&(*GLOBAL_LOGGER.get())),
+            Some(logger) => f(logger),
+            None => unreachable!(),
         }
     })
-}
-
-/// Execute code in a logging scope
-///
-/// Logging scopes allow using a `slog::Logger` without explicitly
-/// passing it in the code.
-///
-/// At any time current active `Logger` for a given thread can be retrived
-/// with `logger()` call.
-///
-/// Logging scopes can be nested and are panic safe.
-///
-/// `logger` is the `Logger` to use during the duration of `f`.
-/// `with_current_logger` can be used to build it as a child of currently active
-/// logger.
-///
-/// `f` is a code to be executed in the logging scope.
-///
-/// Note: Thread scopes are thread-local. Each newly spawned thread starts
-/// with a global logger, as a current logger.
-pub fn scope<SF, R>(logger: &slog::Logger, f: SF) -> R
-    where SF: FnOnce() -> R
-{
-    let _guard = ScopeGuard::new(&logger);
-    f()
 }

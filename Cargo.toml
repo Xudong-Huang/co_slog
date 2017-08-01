@@ -1,9 +1,9 @@
 [package]
-name = "slog-scope"
-version = "4.0.0"
-authors = ["Dawid Ciężarkiewicz <dpc@dpc.pw>"]
-description = "Logging scopes for slog-rs"
-keywords = ["slog", "logging", "slog", "log"]
+name = "co_slog"
+version = "1.0.0"
+authors = ["Xudong Huang<huangxu008@hotmail.com>"]
+description = "Coroutine Logging scopes for slog-rs"
+keywords = ["slog", "logging", "slog", "log", "coroutine"]
 license = "MPL-2.0/MIT/Apache-2.0"
 documentation = "https://docs.rs/slog-scope"
 homepage = "https://github.com/slog-rs/slog"
@@ -15,9 +15,10 @@ path = "lib.rs"
 
 [dependencies]
 slog = "2"
-lazy_static = "0.2.1"
-crossbeam = "0.2.9"
+may = { git = "ssh://git@gitlab.com/Xudong-Huang/may.git" }
 
-[dev-dependencies]
+# [dev-dependencies]
 slog-term = "~2.0.0-4"
 slog-async = "2"
+
+
