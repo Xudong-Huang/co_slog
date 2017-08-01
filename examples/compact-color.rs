@@ -7,7 +7,6 @@ extern crate slog_async;
 extern crate co_slog;
 
 use slog::Drain;
-use std::sync::Arc;
 
 mod common;
 
@@ -16,7 +15,7 @@ fn main() {
     let drain = slog_term::CompactFormat::new(decorator).build().fuse();
     let drain = slog_async::Async::new(drain).build().fuse();
 
-    let log = slog::Logger::root(Arc::new(drain), o!("version" => "0.5"));
+    let log = slog::Logger::root(drain, o!("version" => "0.5"));
 
 
     info!("without logger set");
