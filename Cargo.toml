@@ -10,15 +10,11 @@ homepage = "https://github.com/slog-rs/slog"
 repository = "https://github.com/slog-rs/scope"
 readme = "README.md"
 
-[lib]
-path = "lib.rs"
-
 [dependencies]
 slog = "2"
+slog-term = "~2.0.0-4"
 may = { git = "ssh://git@gitlab.com/Xudong-Huang/may.git" }
 
-# [dev-dependencies]
-slog-term = "~2.0.0-4"
+[dev-dependencies]
 slog-async = "2"
-
 

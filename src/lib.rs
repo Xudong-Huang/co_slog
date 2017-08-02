@@ -35,20 +35,17 @@
 #![feature(macro_reexport)]
 #![warn(missing_docs)]
 
-#[macro_reexport(o, kv, slog_log, slog_kv, slog_record, slog_record_static, slog_b, slog_trace,
+#[macro_reexport(o, b, kv, slog_log, slog_kv, slog_record, slog_record_static, slog_b, slog_trace,
                  slog_debug, slog_info, slog_warn, slog_error, slog_crit)]
 extern crate slog;
 #[macro_use(coroutine_local)]
 extern crate may;
 extern crate slog_term;
-extern crate slog_async;
+// extern crate slog_async;
 
 use slog::*;
-
-// use std::sync::Arc;
 use std::sync::Mutex;
 use std::cell::RefCell;
-// use may::sync::Mutex;
 
 
 /// Log a critical level message using current scope logger
@@ -86,9 +83,9 @@ coroutine_local! {
     static TL_SCOPES: RefCell<Vec<slog::Logger>> = {
         let mut log_stack = Vec::with_capacity(8);
         // the default logger
-        let decorator = slog_term::TermDecorator::new().build();
+        let decorator = slog_term::TermDecorator::new().stderr().build();
         // let drain = slog_term::FullFormat::new(decorator).build().fuse();
-        let drain = Mutex::new(slog_term::FullFormat::new(decorator).build()).fuse();
+        let drain = Mutex::new(slog_term::CompactFormat::new(decorator).build()).fuse();
         // let drain = slog_async::Async::new(drain).build().fuse();
         let log = slog::Logger::root(drain, o!());
         log_stack.push(log);
