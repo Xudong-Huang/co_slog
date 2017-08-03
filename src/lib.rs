@@ -42,17 +42,21 @@ extern crate may;
 #[macro_use]
 extern crate slog;
 extern crate regex;
+extern crate take_mut;
 extern crate slog_term;
 #[macro_use]
 extern crate lazy_static;
 
 mod env_log;
 mod mutex_drain;
+mod async_drain;
 
 use slog::*;
 use std::cell::RefCell;
 
+pub use slog::Drain;
 pub use env_log::EnvLogger;
+pub use async_drain::Async;
 pub use mutex_drain::MutexDrain;
 
 /// Log a critical level message using current scope logger
