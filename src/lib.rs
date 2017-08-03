@@ -47,7 +47,7 @@ extern crate slog_term;
 #[macro_use]
 extern crate lazy_static;
 
-mod env_log;
+mod env_drain;
 mod mutex_drain;
 mod async_drain;
 
@@ -55,8 +55,8 @@ use slog::*;
 use std::cell::RefCell;
 
 pub use slog::Drain;
-pub use env_log::EnvLogger;
-pub use async_drain::Async;
+pub use env_drain::EnvDrain;
+pub use async_drain::AsyncDrain;
 pub use mutex_drain::MutexDrain;
 
 /// Log a critical level message using current scope logger
@@ -93,7 +93,7 @@ macro_rules! trace( ($($args:tt)+) => {
 /// Use a default `EnvLogger` as global logging drain
 lazy_static! {
     static ref GLOBAL_LOGGER : slog::Logger = {
-        env_log::new()
+        env_drain::stderr_logger()
     };
 }
 

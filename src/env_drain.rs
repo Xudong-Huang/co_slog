@@ -78,14 +78,14 @@ use regex::Regex;
 use mutex_drain::MutexDrain;
 use slog::{self, Drain, FilterLevel};
 
-/// `EnvLogger` drain.
-pub struct EnvLogger<T: Drain> {
+/// `EnvDrain` drain.
+pub struct EnvDrain<T: Drain> {
     drain: T,
     directives: Vec<LogDirective>,
     filter: Option<Regex>,
 }
 
-/// LogBuilder acts as builder for initializing the EnvLogger.
+/// LogBuilder acts as builder for initializing the EnvDrain.
 /// It can be used change the enviromental variable used
 /// to provide the logging directives and also set the default log level filter.
 pub struct LogBuilder<T: Drain> {
@@ -133,7 +133,7 @@ impl<T: Drain> LogBuilder<T> {
     }
 
     /// Build an env logger.
-    pub fn build(mut self) -> EnvLogger<T> {
+    pub fn build(mut self) -> EnvDrain<T> {
         if self.directives.is_empty() {
             // Adds the default filter if none exist
             self.directives.push(LogDirective {
@@ -156,7 +156,7 @@ impl<T: Drain> LogBuilder<T> {
             filter,
         } = self;
 
-        EnvLogger {
+        EnvDrain {
             drain: drain,
             directives: directives,
             filter: filter,
@@ -164,16 +164,16 @@ impl<T: Drain> LogBuilder<T> {
     }
 }
 
-impl<T: Drain> EnvLogger<T> {
-    /// Create a `EnvLogger` using `RUST_LOG` environment variable
-    pub fn new(d: T) -> Self {
+impl<T: Drain> EnvDrain<T> {
+    /// Create a `EnvDrain` using `RUST_LOG` environment variable
+    pub fn new(d: T) -> LogBuilder<T> {
         let mut builder = LogBuilder::new(d);
 
         if let Ok(s) = env::var("RUST_LOG") {
             builder = builder.parse(&s);
         }
 
-        builder.build()
+        builder
     }
 
     /// return the env FilterLevel
@@ -195,7 +195,7 @@ impl<T: Drain> EnvLogger<T> {
     }
 }
 
-impl<T: Drain> Drain for EnvLogger<T>
+impl<T: Drain> Drain for EnvDrain<T>
 where
     T: Drain<Ok = ()>,
 {
@@ -221,11 +221,11 @@ struct LogDirective {
     level: FilterLevel,
 }
 
-/// Create a `EnvLogger` using `RUST_LOG` environment variable and log to stderr
-pub fn new() -> slog::Logger {
+/// Create a `EnvDrain` using `RUST_LOG` environment variable and log to stderr
+pub(crate) fn stderr_logger() -> slog::Logger {
     let decrator = slog_term::TermDecorator::new().stderr().build();
     let drain = slog_term::CompactFormat::new(decrator).build();
-    let drain = EnvLogger::new(drain);
+    let drain = EnvDrain::new(drain.fuse()).build();
     let drain = MutexDrain::new(drain.fuse());
 
     slog::Logger::root(drain.fuse(), o!()).into_erased()
@@ -309,9 +309,9 @@ mod tests {
     use slog::{Level, FilterLevel};
     use super::slog;
 
-    use super::{LogBuilder, EnvLogger, LogDirective, parse_logging_spec};
+    use super::{LogBuilder, EnvDrain, LogDirective, parse_logging_spec};
 
-    fn make_logger(dirs: Vec<LogDirective>) -> EnvLogger<slog::Discard> {
+    fn make_logger(dirs: Vec<LogDirective>) -> EnvDrain<slog::Discard> {
         let mut logger = LogBuilder::new(slog::Discard).build();
         logger.directives = dirs;
         logger

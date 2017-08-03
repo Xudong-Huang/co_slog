@@ -153,9 +153,9 @@ impl Serializer for ToSendSerializer {
 }
 // }}}
 
-// {{{ Async
+// {{{ AsyncDrain
 // {{{ AsyncError
-/// Errors reported by `Async`
+/// Errors reported by `AsyncDrain`
 #[derive(Debug)]
 pub enum AsyncError {
     /// Could not send record to worker thread due to full queue
@@ -258,19 +258,19 @@ where
     }
 }
 
-/// Async guard
+/// AsyncDrain guard
 ///
 /// All `Drain`s are reference-counted by every `Logger` that uses them.
-/// `Async` drain runs a worker thread and sends a termination (and flushing)
+/// `AsyncDrain` drain runs a worker thread and sends a termination (and flushing)
 /// message only when being `drop`ed. Because of that it's actually
-/// quite easy to have a left-over reference to a `Async` drain, when
+/// quite easy to have a left-over reference to a `AsyncDrain` drain, when
 /// terminating: especially on `panic`s or similar unwinding event. Typically
 /// it's caused be a leftover reference like `Logger` in thread-local variable,
 /// global variable, or a thread that is not being joined on. It might be a
 /// program bug, but logging should work reliably especially in case of bugs.
 ///
 /// `AsyncGuard` is a remedy: it will send a flush and termination message to
-/// a `Async` worker thread, and wait for it to finish on it's own `drop`. Using it
+/// a `AsyncDrain` worker thread, and wait for it to finish on it's own `drop`. Using it
 /// is a simplest way to guarantee log flushing when using `slog_async`.
 pub struct AsyncGuard {
     // Should always be `Some`. `None` only
@@ -297,9 +297,9 @@ impl Drop for AsyncGuard {
     }
 }
 
-/// Core of `Async` drain
+/// Core of `AsyncDrain` drain
 ///
-/// See `Async` for documentation.
+/// See `AsyncDrain` for documentation.
 ///
 /// Wrapping `AsyncCore` allows implementing custom overflow (and other errors)
 /// handling strategy.
@@ -401,7 +401,7 @@ impl Drop for AsyncCore {
 }
 // }}}
 
-/// `Async` builder
+/// `AsyncDrain` builder
 pub struct AsyncBuilder<D>
 where
     D: Drain<Err = slog::Never, Ok = ()> + Send + 'static,
@@ -424,29 +424,29 @@ where
     //         core: self.core.chan_size(s),
     //     }
     // }
-    /// Complete building `Async`
-    pub fn build(self) -> Async {
-        Async {
+    /// Complete building `AsyncDrain`
+    pub fn build(self) -> AsyncDrain {
+        AsyncDrain {
             core: self.core.build_no_guard(),
             dropped: AtomicUsize::new(0),
         }
     }
 
-    /// Complete building `Async`
-    pub fn build_no_guard(self) -> Async {
-        Async {
+    /// Complete building `AsyncDrain`
+    pub fn build_no_guard(self) -> AsyncDrain {
+        AsyncDrain {
             core: self.core.build_no_guard(),
             dropped: AtomicUsize::new(0),
         }
     }
 
-    /// Complete building `Async` with `AsyncGuard`
+    /// Complete building `AsyncDrain` with `AsyncGuard`
     ///
     /// See `AsyncGuard` for more information.
-    pub fn build_with_guard(self) -> (Async, AsyncGuard) {
+    pub fn build_with_guard(self) -> (AsyncDrain, AsyncGuard) {
         let (core, guard) = self.core.build_with_guard();
         (
-            Async {
+            AsyncDrain {
                 core: core,
                 dropped: AtomicUsize::new(0),
             },
@@ -457,37 +457,37 @@ where
 
 /// Async drain
 ///
-/// `Async` will send all the logging records to a wrapped drain running in
+/// `AsyncDrain` will send all the logging records to a wrapped drain running in
 /// another thread.
 ///
-/// `Async` never returns `AsyncError::Full`.
+/// `AsyncDrain` never returns `AsyncError::Full`.
 ///
 /// `Record`s are passed to the worker thread through a channel with a bounded
-/// size (see `AsyncBuilder::chan_size`). On channel overflow `Async` will
+/// size (see `AsyncBuilder::chan_size`). On channel overflow `AsyncDrain` will
 /// start dropping `Record`s and log a message informing about it after
 /// sending more `Record`s is possible again. The exact details of handling
 /// overflow is implementation defined, might change and should not be relied
 /// on, other than message won't be dropped as long as channel does not
 /// overflow.
 ///
-/// Any messages reported by `Async` will contain `slog-async` logging `Record`
+/// Any messages reported by `AsyncDrain` will contain `slog-async` logging `Record`
 /// tag to allow easy custom handling.
 ///
-/// Note: On drop `Async` waits for it's worker-thread to finish (after handling
+/// Note: On drop `AsyncDrain` waits for it's worker-thread to finish (after handling
 /// all previous `Record`s sent to it). If you can't tolerate the delay, make
 /// sure you drop it eg. in another thread.
-pub struct Async {
+pub struct AsyncDrain {
     core: AsyncCore,
     dropped: AtomicUsize,
 }
 
-impl Async {
+impl AsyncDrain {
     /// New `AsyncCore` with default parameters
     pub fn default<D: Drain<Err = slog::Never, Ok = ()> + Send + 'static>(drain: D) -> Self {
         AsyncBuilder::new(drain).build()
     }
 
-    /// Build `Async` drain with custom parameters
+    /// Build `AsyncDrain` drain with custom parameters
     ///
     /// The wrapped drain must handle all results (`Drain<Ok=(),Error=Never>`)
     /// since there's no way to return it back. See `slog::DrainExt::fuse()` and
@@ -524,7 +524,7 @@ impl Async {
     }
 }
 
-impl Drain for Async {
+impl Drain for AsyncDrain {
     type Ok = ();
     type Err = AsyncError;
 
@@ -546,7 +546,7 @@ impl Drain for Async {
     }
 }
 
-impl Drop for Async {
+impl Drop for AsyncDrain {
     fn drop(&mut self) {
         let _ = self.push_dropped(&o!().into());
     }
