@@ -11,10 +11,12 @@ repository = "https://github.com/slog-rs/scope"
 readme = "README.md"
 
 [dependencies]
-slog = "2"
-slog-term = "2"
-slog-async = { git = "https://github.com/Xudong-Huang/async.git" }
-lazy_static = "0.2"
 may = { git = "ssh://git@gitlab.com/Xudong-Huang/may.git" }
+slog = "2"
+regex = "0.2"
+slog-term = "2"
+lazy_static = "0.2"
+[dev-dependencies]
+slog-async = { git = "https://github.com/Xudong-Huang/async.git" }
 
 

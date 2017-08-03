@@ -35,15 +35,18 @@
 #![feature(macro_reexport)]
 #![warn(missing_docs)]
 
-#[macro_reexport(o, b, kv, slog_log, slog_kv, slog_record, slog_record_static, slog_b, slog_trace,
-                 slog_debug, slog_info, slog_warn, slog_error, slog_crit)]
-extern crate slog;
 #[macro_use(coroutine_local)]
 extern crate may;
+#[macro_reexport(o, b, kv, slog_log, slog_kv, slog_record, slog_record_static, slog_b, slog_trace,
+                 slog_debug, slog_info, slog_warn, slog_error, slog_crit)]
+#[macro_use]
+extern crate slog;
+extern crate regex;
 extern crate slog_term;
-extern crate slog_async;
 #[macro_use]
 extern crate lazy_static;
+
+mod env_log;
 
 use slog::*;
 use std::cell::RefCell;
@@ -80,14 +83,10 @@ macro_rules! trace( ($($args:tt)+) => {
     $crate::with_logger(|logger| slog_trace![logger, $($args)+])
 };);
 
+/// Use a default `EnvLogger` as global logging drain
 lazy_static! {
     static ref GLOBAL_LOGGER : slog::Logger = {
-        // the default logger
-        let decorator = slog_term::TermDecorator::new().stderr().build();
-        // let drain = slog_term::FullFormat::new(decorator).build().fuse();
-        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
-        slog::Logger::root(drain, o!())
+        env_log::new()
     };
 }
 

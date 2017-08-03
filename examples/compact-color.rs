@@ -11,5 +11,4 @@ fn main() {
     let log = co_slog::logger().new(o!("version" => "0.5"));
     let _guard = co_slog::set_logger(log);
     common::simulate_server();
-    may::coroutine::sleep(::std::time::Duration::from_millis(100));
 }
