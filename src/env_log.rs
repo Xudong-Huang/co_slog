@@ -73,16 +73,10 @@
 
 
 use std::env;
-use std::cell::RefCell;
-use slog;
 use slog_term;
 use regex::Regex;
-
-use slog::{Drain, FilterLevel};
-
-coroutine_local! {
-    static TL_BUF: RefCell<String> = RefCell::new(String::new())
-}
+use mutex_drain::MutexDrain;
+use slog::{self, Drain, FilterLevel};
 
 /// `EnvLogger` drain.
 pub struct EnvLogger<T: Drain> {
@@ -182,7 +176,7 @@ impl<T: Drain> EnvLogger<T> {
         builder.build()
     }
 
-    #[allow(dead_code)]
+    /// return the env FilterLevel
     pub fn filter(&self) -> FilterLevel {
         self.directives.iter().map(|d| d.level).max().unwrap_or(
             FilterLevel::Off,
@@ -218,12 +212,7 @@ where
             }
         }
 
-        TL_BUF.with(|buf| {
-            let mut buf = buf.borrow_mut();
-            let res = self.drain.log(info, val);
-            buf.clear();
-            res
-        })
+        self.drain.log(info, val)
     }
 }
 
@@ -237,7 +226,7 @@ pub fn new() -> slog::Logger {
     let decrator = slog_term::TermDecorator::new().stderr().build();
     let drain = slog_term::CompactFormat::new(decrator).build();
     let drain = EnvLogger::new(drain);
-    let drain = ::std::sync::Mutex::new(drain.fuse());
+    let drain = MutexDrain::new(drain.fuse());
 
     slog::Logger::root(drain.fuse(), o!()).into_erased()
 }

@@ -47,10 +47,13 @@ extern crate slog_term;
 extern crate lazy_static;
 
 mod env_log;
+mod mutex_drain;
 
 use slog::*;
 use std::cell::RefCell;
 
+pub use env_log::EnvLogger;
+pub use mutex_drain::MutexDrain;
 
 /// Log a critical level message using current scope logger
 #[macro_export]
@@ -90,6 +93,7 @@ lazy_static! {
     };
 }
 
+/// the logger stack infrustructure
 coroutine_local! {
     static TL_SCOPES: RefCell<Vec<slog::Logger>> = {
         let mut log_stack = Vec::with_capacity(8);
