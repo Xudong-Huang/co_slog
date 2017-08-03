@@ -41,10 +41,11 @@ extern crate slog;
 #[macro_use(coroutine_local)]
 extern crate may;
 extern crate slog_term;
-// extern crate slog_async;
+extern crate slog_async;
+#[macro_use]
+extern crate lazy_static;
 
 use slog::*;
-use std::sync::Mutex;
 use std::cell::RefCell;
 
 
@@ -79,15 +80,22 @@ macro_rules! trace( ($($args:tt)+) => {
     $crate::with_logger(|logger| slog_trace![logger, $($args)+])
 };);
 
+lazy_static! {
+    static ref GLOBAL_LOGGER : slog::Logger = {
+        // the default logger
+        let decorator = slog_term::TermDecorator::new().stderr().build();
+        // let drain = slog_term::FullFormat::new(decorator).build().fuse();
+        let drain = slog_term::CompactFormat::new(decorator).build().fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        slog::Logger::root(drain, o!())
+    };
+}
+
 coroutine_local! {
     static TL_SCOPES: RefCell<Vec<slog::Logger>> = {
         let mut log_stack = Vec::with_capacity(8);
         // the default logger
-        let decorator = slog_term::TermDecorator::new().stderr().build();
-        // let drain = slog_term::FullFormat::new(decorator).build().fuse();
-        let drain = Mutex::new(slog_term::CompactFormat::new(decorator).build()).fuse();
-        // let drain = slog_async::Async::new(drain).build().fuse();
-        let log = slog::Logger::root(drain, o!());
+        let log = GLOBAL_LOGGER.clone();
         log_stack.push(log);
         RefCell::new(log_stack)
     }
