@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate may;
 extern crate slog;
 extern crate slog_term;
@@ -40,6 +41,8 @@ fn server_3() {
 fn main() {
     info!("log with default logger"; "asdfasdf" => 100, "hhee" => r#"{a: 100, b: "adfads" }"#);
     error!("bomb!");
+
+    // co_slog::set_global_logger(slog::Logger::root(slog::Discard, o!()));
 
     server_3();
 }

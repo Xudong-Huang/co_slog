@@ -44,6 +44,7 @@ extern crate slog;
 extern crate regex;
 extern crate take_mut;
 extern crate slog_term;
+extern crate crossbeam;
 #[macro_use]
 extern crate lazy_static;
 
@@ -52,7 +53,9 @@ mod mutex_drain;
 mod async_drain;
 
 use slog::*;
+use std::sync::Arc;
 use std::cell::RefCell;
+use crossbeam::sync::ArcCell;
 
 pub use slog::Drain;
 pub use env_drain::EnvDrain;
@@ -92,19 +95,43 @@ macro_rules! trace( ($($args:tt)+) => {
 
 /// Use a default `EnvLogger` as global logging drain
 lazy_static! {
-    static ref GLOBAL_LOGGER : slog::Logger = {
+    static ref ENV_LOGGER : slog::Logger = {
         env_drain::stderr_logger()
     };
+
+    static ref GLOBAL_LOGGER : ArcCell<slog::Logger> = {
+        ArcCell::new(Arc::new(ENV_LOGGER.clone()))
+    };
+}
+
+
+/// On drop it will reset global logger to `ENV_LOGGER`.
+struct GlobalLoggerGuard;
+impl Drop for GlobalLoggerGuard {
+    fn drop(&mut self) {
+        GLOBAL_LOGGER.set(Arc::new(ENV_LOGGER.clone()));
+    }
+}
+
+/// the global logger guard, valid for the whole life of the thread/coroutine
+coroutine_local! {
+    static GLOBAL_GUARD: RefCell<Option<GlobalLoggerGuard>> = {
+        RefCell::new(None)
+    }
+}
+
+/// Set global `Logger`
+/// if the setter thread/coroutine exit,
+/// the global logger would reset to default EVN_LOGGER
+pub fn set_global_logger(l: slog::Logger) {
+    GLOBAL_LOGGER.set(Arc::new(l));
+    GLOBAL_GUARD.with(|g| *g.borrow_mut() = Some(GlobalLoggerGuard));
 }
 
 /// the logger stack infrustructure
 coroutine_local! {
     static TL_SCOPES: RefCell<Vec<slog::Logger>> = {
-        let mut log_stack = Vec::with_capacity(8);
-        // the default logger
-        let log = GLOBAL_LOGGER.clone();
-        log_stack.push(log);
-        RefCell::new(log_stack)
+        RefCell::new(Vec::with_capacity(8))
     }
 }
 
@@ -145,7 +172,7 @@ pub fn logger() -> Logger {
         let s = s.borrow();
         match s.last() {
             Some(logger) => logger.clone(),
-            None => unreachable!(),
+            None => (*GLOBAL_LOGGER.get()).clone(),
         }
     })
 }
@@ -162,7 +189,7 @@ where
         let s = s.borrow();
         match s.last() {
             Some(logger) => f(logger),
-            None => unreachable!(),
+            None => f(&(*GLOBAL_LOGGER.get())),
         }
     })
 }

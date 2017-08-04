@@ -16,6 +16,7 @@ slog = "2"
 regex = "0.2"
 take_mut = "0.1"
 slog-term = "2"
+crossbeam = "0.3"
 lazy_static = "0.2"
 
 
