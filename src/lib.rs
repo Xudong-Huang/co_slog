@@ -32,13 +32,10 @@
 //!     let _guard = co_slog::set_logger(log.new(slog_o!("scope" => "1")));
 //!     foo();
 //! }
-#![feature(macro_reexport)]
 #![warn(missing_docs)]
 
 #[macro_use(coroutine_local)]
 extern crate may;
-#[macro_reexport(o, b, kv, slog_log, slog_kv, slog_record, slog_record_static, slog_b, slog_trace,
-                 slog_debug, slog_info, slog_warn, slog_error, slog_crit)]
 #[macro_use]
 extern crate slog;
 extern crate regex;
