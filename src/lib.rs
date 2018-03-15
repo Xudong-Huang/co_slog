@@ -49,7 +49,7 @@ mod env_drain;
 mod mutex_drain;
 mod async_drain;
 
-use slog::*;
+use slog::Logger;
 use std::sync::Arc;
 use std::cell::RefCell;
 use crossbeam::sync::ArcCell;
